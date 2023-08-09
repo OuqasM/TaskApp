@@ -1,0 +1,22 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Ajouter une nouvelle tâche{% endblock %}
+
+{% block body %}
+    <div class="container">
+        <h1 class="text-center">Ajouter une nouvelle tâche</h1>
+        
+        {# Checkeu si il y'a une message dans le flashBag #}
+        {% if app.session.flashBag.has('message') %}
+            <div class="alert alert-success">
+                {{ app.session.flashBag.get('message')[0] }}
+            </div>
+        {% endif %}
+
+        {{ form_start(form) }}
+        {{ form_row(form.Titre) }}
+        {{ form_row(form.Description) }}
+        <button type="submit" class="btn btn-primary">Ajouter</button>
+        {{ form_end(form) }}
+    </div>
+{% endblock %}

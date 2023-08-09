@@ -1,23 +1,185 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Hello TaskController!{% endblock %}
+{% block title %}Task Acceuil{% endblock %}
+
+{% block css %} 
+    <style>
+        /* Styles personnalisés */
+        .completed {
+            text-decoration: line-through;
+        }
+        .deleted {
+            background-color: #f8d7da;
+        }
+        /* Style des liens de pagination */
+        .pagination a {
+            padding: 6px 12px;
+            margin: 0 3px;
+            font-size: 14px;
+            border-radius: 3px;
+            color: white;
+            background-color: #007bff; 
+            border: 1px solid #007bff;
+        }
+        
+        /* Style du lien de pagination actif */
+        .pagination .current {
+            background-color: #0056b3; 
+            border-color: #0056b3;
+            padding: 6px 12px;
+            margin: 0 3px;
+            font-size: 14px;
+            border-radius: 3px;
+            color: white;
+        }
+    </style>
+{% endblock %}
 
 {% block body %}
-<style>
-    .example-wrapper { margin: 1em auto; max-width: 800px; width: 95%; font: 18px/1.5 sans-serif; }
-    .example-wrapper code { background: #F5F5F5; padding: 2px 6px; }
-</style>
+<div class="container">
 
-<div class="example-wrapper">
-
-    {% block content %}
-        <h1>Liste des tâches</h1>
-        <ul>
-            {% for task in tasks %}
-                <li>{{ task.titre }} - {{ task.description }}</li>
-            {% endfor %}
-        </ul>
-    {% endblock %}
+    <h1 class="text-center">Liste des tâches</h1>
     
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="filterState">Filtrer par État :</label>
+            <!-- Sélecteur pour filtrer par état -->
+            <select id="filterState" class="form-control">
+                <option value="">Tous</option>
+                <option value="En cours" {{ filter == 'En cours' ? 'selected' : '' }}>En cours</option>
+                <option value="Terminée" {{ filter == 'Terminée' ? 'selected' : '' }}>Terminée</option>
+                <option value="Annulée" {{ filter == 'Annulée' ? 'selected' : '' }}>Annulée</option>
+            </select>
+        </div>
+    </div>
+    
+    <div id="alerts-container"></div>
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Titre</th>
+                <th>Description</th>
+                <th>Date de création</th>
+                <th>État</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in pagination %}
+                <!-- Ligne de chaque tache avec classe de style en fonction de l'état -->
+                <tr id="task-{{ task.id }}" class="{{ task.etat == 'Terminée' ? 'table-success completed' : '' }} {{ task.etat == 'Annulée' ? 'table-danger deleted' : '' }}">
+                    <td class="text-center align-middle">{{ task.id }}</td>
+                    <td class="text-center align-middle">{{ task.titre }}</td>
+                    <td class="text-center align-middle">{{ task.description }}</td>
+                    <td class="text-center align-middle">{{ task.getDateDeCreation()|date('Y-m-d H:i:s') }}</td>
+                    <td class="text-center align-middle task-status">{{ task.etat }}</td>
+                    <td class="text-center align-middle">
+                        {% if task.etat != 'Terminée' and task.etat != 'Annulée' %}
+                           <button class="btn btn-danger delete-task" data-task-id="{{ task.id }}">Annuler</button>
+                           <button class="btn btn-primary mark-completed" data-task-id="{{ task.id }}">Terminé</button>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            <!-- Message si aucune tache trouvée sur la page -->
+            {% if pagination.items|length == 0 %}
+                <tr>
+                    <td colspan="6" class="text-center">Aucune tache trouvée sur cette page.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+    
+    <!-- Liens de pagination -->
+    <div class="pagination justify-content-center">
+        {{ knp_pagination_render(pagination) }}
+    </div>
 </div>
+
+{% endblock %}
+
+{% block js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+    const MARK_COMPLETE_URL = "{{ path('task_complete', {'id': 'TASK_ID'}) }}";
+    const DELETE_TASK_URL = "{{ path('task_delete', {'id': 'TASK_ID'}) }}";
+
+    $(document).ready(function() {
+
+        // Gestionnaire de changement d'état de filtrage
+        $('#filterState').change(function() {
+            const selectedState = $('#filterState').val();
+            window.location.href = '{{ path('task_list') }}?filter=' + selectedState;
+        });
+        
+        $('.mark-completed').click(function() {
+            const taskId = $(this).data('task-id');
+            markAsCompleted(taskId);
+        });
+        
+        $('.delete-task').click(function() {
+            const taskId = $(this).data('task-id');
+            deleteTask(taskId);
+        }); 
+
+    });
+
+    // afficher l'alerte
+    function showAlert(message, alertClass) {
+        const alertHTML = `
+            <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>`;
+        
+        $('#alerts-container').append(alertHTML);
+    }
+
+    // marquer une tache comme terminée
+    function markAsCompleted(taskId) {
+        $.ajax({
+            type: 'PUT',
+            url: MARK_COMPLETE_URL.replace('TASK_ID', taskId),
+            dataType: 'json',
+            success: function(response) {
+                const alertMessage = response.message;
+                showAlert(alertMessage, 'alert-success');
+                
+                // Mettre à jour l'apparence de la tache
+                $('#task-' + taskId).addClass('table-success completed');
+                $('#task-' + taskId + ' .mark-completed, #task-' + taskId + ' .delete-task').remove();
+                $('#task-' + taskId + ' .task-status').text('Terminée'); // Mettre à jour le texte de l'état
+            },
+            error: function(error) {
+                console.log(error);
+            }
+        });
+    }
+
+    // supprimer une tache (mettre annulée)
+    function deleteTask(taskId) {
+        $.ajax({
+            type: 'PUT',
+            url: DELETE_TASK_URL.replace('TASK_ID', taskId),
+            dataType: 'json',
+            success: function(response) {
+                const alertMessage = response.message;
+                showAlert(alertMessage, 'alert-danger');
+                
+                // Mettre à jour l'apparence de la tache
+                $('#task-' + taskId).addClass('table-danger deleted');
+                $('#task-' + taskId + ' .mark-completed, #task-' + taskId + ' .delete-task').remove();
+                $('#task-' + taskId + ' .task-status').text('Annulée'); // Mettre à jour le texte de l'état
+            },
+            error: function(error) {
+                console.log(error);
+            }
+        });
+    }
+</script>
 {% endblock %}
